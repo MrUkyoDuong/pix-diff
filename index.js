@@ -4,6 +4,8 @@ var BlinkDiff = require('blink-diff'),
     path = require('path'),
     util = require('util');
 
+var the_result_code = undefined;  // add by Ukyo
+
 /**
  * Pix-diff protractor plugin class
  *
@@ -152,10 +154,55 @@ PixDiff.prototype = {
                     return new BlinkDiff(this._mergeDefaultOptions(defaults, options)).runWithPromise();
                 }.bind(this))
                 .then(function(result) {
+
+                    the_result_code = result.code; // added in by Ukyo
                     return result;
                 });
         }.bind(this));
     },
+
+
+    checkScreen_Ukyo: function(tag, options) {
+        var defaults;
+
+        return this._flow.execute(function() {
+            return browser.takeScreenshot()
+                .then(function(image) {
+                    tag = util.format('%s-%s-%sx%s.png', tag, this._capabilities.browserName, this._width, this._height);
+                    defaults = {
+                        imageAPath: path.join(this._basePath, tag),
+                        imageB: new Buffer(image, 'base64'),
+                        imageOutputPath: path.join(this._basePath, 'diff', path.basename(tag)),
+                        imageOutputLimit: BlinkDiff.OUTPUT_DIFFERENT
+                    };
+                    return new BlinkDiff(this._mergeDefaultOptions(defaults, options)).runWithPromise_Ukyo();
+                }.bind(this))
+                .then(function(result) {
+
+                    // Ukyo's note:  from _compare() function in blink-diff/index.js file, result object has these
+                    // properties
+
+                    the_result_code = result.code;
+
+                    // console.log("From checkScreenUKyo(): results.code = " + result.code);
+
+                    return result;
+                });
+        }.bind(this));
+    },
+
+    // Ukyo created this code
+    getResultCode: function() {
+        return this._flow.execute(function() {
+
+            if (the_result_code != undefined) {
+                return the_result_code;
+            }
+
+        }.bind(this));
+    },
+
+
 
     /**
      * Runs the comparison against a region
@@ -223,7 +270,8 @@ PixDiff.prototype = {
                     return "Image is identical or near identical";
                 };
                 return ((result.code === BlinkDiff.RESULT_DIFFERENT) && (result.code !== BlinkDiff.RESULT_UNKNOWN));
-            }
+            },
+
         },
         v2 = {
             toMatchScreen: function() {
@@ -247,7 +295,21 @@ PixDiff.prototype = {
                         };
                     }
                 }
-            }
+            },
+
+            // Ukyo added in to return TRUE or FALSE instead of raising an error
+            isMatched: function() {
+                return {
+                    compare: function(actual, expected) {
+                        return {
+                            pass: ((actual.code === BlinkDiff.RESULT_THE_SAME) || (actual.code === BlinkDiff.RESULT_NOT_THE_SAME)),
+                            message: "You should not see this message because I don't throw error."
+                        };
+                    }
+                }
+            },
+
+
         };
 
     beforeEach(function() {
